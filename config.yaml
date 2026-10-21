@@ -1,0 +1,50 @@
+# Inputs for the Boomi Flex Runtime deployment on AWS / EKS with EFS.
+# namespace and claim_name must match what you enter in the Runtime Management UI wizard.
+
+runtime:
+  name: prod-flex-runtime-na
+  environment: My Prod            # Assigned in Runtime Management UI, not by Terraform
+  workloads:
+    - agent                       # Selected in the wizard (reference only)
+
+aws:
+  region: us-east-1
+  profile: ""                     # Optional AWS CLI profile; leave empty to use the default credential chain
+  eks_cluster_name: prod-eks-cluster
+  vpc_id: vpc-0123456789abcdef0
+  subnet_ids:                     # One subnet per AZ where your EKS nodes run (EFS allows one mount target per AZ)
+    - subnet-0aaa1111bbbb2222c
+    - subnet-0ddd3333eeee4444f
+    - subnet-0ggg5555hhhh6666i
+  node_security_group_id: sg-0123456789abcdef0   # SG attached to the EKS worker nodes
+  install_efs_csi_addon: true     # Set false if the EFS CSI driver is already installed
+  efs_csi_role_arn: ""            # Optional IRSA role with AmazonEFSCSIDriverPolicy; empty uses the node role
+
+kubernetes:
+  kubeconfig_path: ~/.kube/config
+  kube_context: prod-eks-cluster  # Used by the Terraform provider and runtimectl --kube-context
+  namespace: boomi-flex-prod      # One runtime per namespace; must match the wizard
+
+storage:
+  claim_name: boomi-flex-pvc      # Must match the claim name entered in the UI
+  capacity: 10Gi                  # Nominal; EFS is elastic, so this is not a hard limit
+
+efs:
+  name: boomi-flex-prod
+  encrypted: true
+  kms_key_id: ""                  # Optional customer-managed KMS key ARN; empty uses the AWS-managed key
+  performance_mode: generalPurpose
+  throughput_mode: elastic        # Or "bursting". "provisioned" also needs provisioned_throughput_in_mibps (not wired up here)
+  access_point:
+    path: /boomi-flex
+    uid: 1000                     # Required by the docs: writable by UID 1000
+    gid: 1000                     # Required by the docs: writable by GID 1000
+    permissions: "0755"
+
+ingress:
+  # tls_before_runtime -> route to ingress-gateway port 8080 (TLS ends at your LB/gateway)
+  # end_to_end         -> route to ingress-gateway port 8443 and trust boomi-runtime-ca
+  tls_mode: end_to_end
+
+runtimectl:
+  binary_path: /usr/local/bin/runtimectl   # Linux only during Early Access
